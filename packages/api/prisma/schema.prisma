@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  password  String
+  name      String
+  bookings  Booking[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+model Movie {
+  id          String     @id @default(uuid())
+  title       String
+  description String
+  duration    Int
+  imageUrl    String?
+  showtimes   Showtime[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Theater {
+  id          String     @id @default(uuid())
+  name        String
+  location    String
+  totalSeats  Int
+  seatLayout  Json
+  showtimes   Showtime[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Showtime {
+  id            String    @id @default(uuid())
+  movieId       String
+  theaterId     String
+  startTime     DateTime
+  endTime       DateTime
+  price         Decimal   @db.Decimal(10, 2)
+  availableSeats String[]
+  movie         Movie     @relation(fields: [movieId], references: [id])
+  theater       Theater   @relation(fields: [theaterId], references: [id])
+  bookings      Booking[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Booking {
+  id         String   @id @default(uuid())
+  userId     String
+  showtimeId String
+  seats      String[]
+  totalPrice Decimal  @db.Decimal(10, 2)
+  status     String   // e.g., 'pending', 'confirmed', 'cancelled'
+  user       User     @relation(fields: [userId], references: [id])
+  showtime   Showtime @relation(fields: [showtimeId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+} 

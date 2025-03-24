@@ -1,0 +1,19 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json yarn.lock ./
+COPY packages/api/package.json ./packages/api/
+
+# Install dependencies with legacy peer deps to handle dependency conflicts
+RUN yarn install --legacy-peer-deps
+
+# Copy source code
+COPY . .
+
+# Expose port
+EXPOSE 3000
+
+# Start the application in development mode
+CMD ["yarn", "workspace", "@project-nest/api", "start:dev"] 
