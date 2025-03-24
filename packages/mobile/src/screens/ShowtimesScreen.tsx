@@ -1,18 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  SafeAreaView,
+  Image,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
-import { useMovieStore } from '../store/movieStore';
-import { Showtime } from '../types/data';
-import { format } from 'date-fns';
+import { useMovie, useTheater, useShowtimesByMovie } from '../services/api/useApi';
+import { colors } from '../theme';
+import { Ionicons } from '@expo/vector-icons';
 
 type ShowtimesScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Showtimes'>;
@@ -21,211 +23,218 @@ type ShowtimesScreenProps = {
 
 export default function ShowtimesScreen({ navigation, route }: ShowtimesScreenProps) {
   const { movieId, theaterId } = route.params;
-  const { movies, theaters, getShowtimesForMovieAndTheater } = useMovieStore();
+  const { data: movie, isLoading: isLoadingMovie } = useMovie(movieId);
+  const { data: theater, isLoading: isLoadingTheater } = useTheater(theaterId);
+  const { data: showtimes, isLoading: isLoadingShowtimes } = useShowtimesByMovie(movieId);
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [loading, setLoading] = useState(false);
 
-  const movie = movies.find((m) => m.id === movieId);
-  const theater = theaters.find((t) => t.id === theaterId);
-  const showtimes = getShowtimesForMovieAndTheater(movieId, theaterId);
-
-  useEffect(() => {
-    if (movie && theater) {
-      navigation.setOptions({
-        title: `${movie.title} at ${theater.name}`,
-      });
-    }
-  }, [movie, theater, navigation]);
-
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() + i);
-    return date;
-  });
-
-  const filteredShowtimes = showtimes.filter((showtime) => {
-    const showtimeDate = new Date(showtime.startTime);
+  if (isLoadingMovie || isLoadingTheater || isLoadingShowtimes) {
     return (
-      showtimeDate.getDate() === selectedDate.getDate() &&
-      showtimeDate.getMonth() === selectedDate.getMonth() &&
-      showtimeDate.getFullYear() === selectedDate.getFullYear()
-    );
-  });
-
-  const handleShowtimeSelect = async (showtime: Showtime) => {
-    setLoading(true);
-    try {
-      // In a real app, this would check seat availability with the backend
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      navigation.navigate('SeatSelection', {
-        showtimeId: showtime.id,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!movie || !theater) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Movie or theater not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
+  if (!movie || !theater || !showtimes) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Error loading showtimes. Please try again later.</Text>
+      </View>
+    );
+  }
+
+  const handleShowtimeSelect = (showtimeId: string) => {
+    navigation.navigate('SeatSelection', { showtimeId });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  };
+
+  const getOffsetTime = (dateString: string, offsetMinutes: number) => {
+    const date = new Date(dateString);
+    date.setMinutes(date.getMinutes() - offsetMinutes);
+    return formatTime(date.toISOString());
+  };
+
   return (
-    <View style={styles.container}>
-      <FlatList
-        horizontal
-        data={dates}
-        keyExtractor={(date) => date.toISOString()}
-        renderItem={({ item: date }) => (
-          <TouchableOpacity
-            style={[
-              styles.dateButton,
-              date.getTime() === selectedDate.getTime() && styles.selectedDateButton,
-            ]}
-            onPress={() => setSelectedDate(date)}
-          >
-            <Text
-              style={[
-                styles.dateText,
-                date.getTime() === selectedDate.getTime() && styles.selectedDateText,
-              ]}
-            >
-              {format(date, 'EEE')}
-            </Text>
-            <Text
-              style={[
-                styles.dateNumber,
-                date.getTime() === selectedDate.getTime() && styles.selectedDateText,
-              ]}
-            >
-              {format(date, 'd')}
-            </Text>
-          </TouchableOpacity>
-        )}
-        style={styles.datesList}
-      />
-
-      <FlatList
-        data={filteredShowtimes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item: showtime }) => (
-          <TouchableOpacity
-            style={[
-              styles.showtimeButton,
-              showtime.seatsAvailable < 10 && styles.lowAvailabilityButton,
-            ]}
-            onPress={() => handleShowtimeSelect(showtime)}
-            disabled={showtime.seatsAvailable === 0 || loading}
-          >
-            <Text style={styles.showtimeText}>
-              {format(new Date(showtime.startTime), 'h:mm a')}
-            </Text>
-            <Text style={styles.priceText}>${showtime.price.toFixed(2)}</Text>
-            <Text style={styles.seatsText}>
-              {showtime.seatsAvailable === 0
-                ? 'Sold Out'
-                : showtime.seatsAvailable < 10
-                ? `${showtime.seatsAvailable} seats left`
-                : 'Available'}
-            </Text>
-          </TouchableOpacity>
-        )}
-        style={styles.showtimesList}
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No showtimes available for this date</Text>
-        }
-      />
-
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
+    <SafeAreaView style={styles.container}>
+      <ScrollView>
+        <View style={styles.header}>
+          <Image source={{ uri: movie.imageUrl }} style={styles.movieImage} />
+          <View style={styles.movieInfo}>
+            <Text style={styles.movieTitle}>{movie.title}</Text>
+            <Text style={styles.duration}>{movie.duration} MIN | PG-13</Text>
+          </View>
         </View>
-      )}
-    </View>
+
+        <View style={styles.theaterInfo}>
+          <Text style={styles.theaterName}>{theater.name}</Text>
+          <Text style={styles.theaterLocation}>{theater.location}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>IMAX WITH LASER AT AMC</Text>
+          <Text style={styles.sectionSubtitle}>EXTRAORDINARY AWAITS</Text>
+          <View style={styles.amenities}>
+            <Text style={styles.amenityText}>Reserved Seating</Text>
+            <Text style={styles.amenityText}>IMAX at AMC</Text>
+            <Text style={styles.amenityText}>Closed Caption</Text>
+            <Text style={styles.amenityText}>Audio Description</Text>
+          </View>
+          <View style={styles.showtimes}>
+            {showtimes.map((showtime) => (
+              <TouchableOpacity
+                key={showtime.id}
+                style={styles.showtimeButton}
+                onPress={() => handleShowtimeSelect(showtime.id)}
+              >
+                <Text style={styles.showtimeText}>
+                  {formatTime(showtime.startTime)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>PRIME</Text>
+          <Text style={styles.sectionSubtitle}>PERCEIVE THE POWER</Text>
+          <View style={styles.amenities}>
+            <Text style={styles.amenityText}>AMC Signature Recliners</Text>
+            <Text style={styles.amenityText}>Reserved Seating</Text>
+            <Text style={styles.amenityText}>Closed Caption</Text>
+            <Text style={styles.amenityText}>Audio Description</Text>
+          </View>
+          <View style={styles.showtimes}>
+            {showtimes.map((showtime) => (
+              <TouchableOpacity
+                key={`prime-${showtime.id}`}
+                style={styles.showtimeButton}
+                onPress={() => handleShowtimeSelect(showtime.id)}
+              >
+                <Text style={styles.showtimeText}>
+                  {getOffsetTime(showtime.startTime, 30)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <Text style={styles.discountText}>UP TO 20% OFF</Text>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
-  datesList: {
-    maxHeight: 100,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  dateButton: {
-    padding: 12,
-    marginRight: 8,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    minWidth: 60,
-  },
-  selectedDateButton: {
-    backgroundColor: '#007AFF',
-  },
-  dateText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  dateNumber: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  selectedDateText: {
-    color: '#fff',
-  },
-  showtimesList: {
+  loadingContainer: {
     flex: 1,
-    padding: 16,
-  },
-  showtimeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  lowAvailabilityButton: {
-    backgroundColor: '#fff3e0',
-  },
-  showtimeText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    flex: 1,
-  },
-  priceText: {
-    fontSize: 16,
-    color: '#007AFF',
-    marginHorizontal: 16,
-  },
-  seatsText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    marginTop: 32,
-  },
-  errorText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#ff3b30',
-    marginTop: 32,
-  },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  header: {
+    flexDirection: 'row',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  movieImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 16,
+  },
+  movieInfo: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  movieTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  duration: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  theaterInfo: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  theaterName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  theaterLocation: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  section: {
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  sectionSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 16,
+  },
+  amenities: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  amenityText: {
+    fontSize: 14,
+    color: colors.text,
+    marginRight: 16,
+    marginBottom: 8,
+  },
+  showtimes: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  showtimeButton: {
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginRight: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  showtimeText: {
+    fontSize: 16,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  discountText: {
+    fontSize: 14,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 16,
+    color: colors.text,
+    textAlign: 'center',
+    marginTop: 16,
   },
 }); 

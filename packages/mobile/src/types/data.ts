@@ -1,24 +1,27 @@
 export interface Movie {
   id: string;
   title: string;
-  posterUrl: string;
-  duration: number; // in minutes
-  rating: string;
-  genre: string[];
-  synopsis: string;
-  releaseDate: string;
+  description: string;
+  duration: number;
+  imageUrl: string;
+  posterUrl?: string; // For backward compatibility
+  rating?: string;
+  genre?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Theater {
   id: string;
   name: string;
-  address: string;
-  location: {
-    latitude: number;
-    longitude: number;
+  location: string;
+  totalSeats: number;
+  seatLayout: {
+    rows: number;
+    seatsPerRow: number;
   };
-  amenities: string[];
-  screens: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Showtime {
@@ -27,18 +30,39 @@ export interface Showtime {
   theaterId: string;
   startTime: string;
   endTime: string;
-  screen: number;
-  seatsAvailable: number;
-  totalSeats: number;
   price: number;
+  availableSeats: string[];
+  movie?: Movie;
+  theater?: Theater;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Booking {
+  id: string;
+  userId: string;
+  showtimeId: string;
+  seats: string[];
+  totalPrice: number;
+  showtime?: Showtime;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Seat {
   id: string;
   row: string;
   number: number;
-  status: 'available' | 'reserved' | 'occupied';
-  type: 'standard' | 'premium' | 'handicap';
+  isAvailable: boolean;
+  isSelected: boolean;
 }
 
 export interface Ticket {

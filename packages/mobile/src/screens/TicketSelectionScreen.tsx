@@ -1,158 +1,137 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  FlatList,
+  ScrollView,
   ActivityIndicator,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { useMovieStore } from '../store/movieStore';
+import { useShowtime } from '../services/api/useApi';
+import { colors } from '../theme';
 
 type TicketSelectionScreenProps = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'TicketSelection'>;
   route: RouteProp<RootStackParamList, 'TicketSelection'>;
 };
 
-interface TicketType {
-  id: string;
-  name: string;
-  price: number;
-  description: string;
-}
-
-const ticketTypes: TicketType[] = [
-  {
-    id: 'adult',
-    name: 'Adult',
-    price: 14.99,
-    description: 'Ages 13 and up',
-  },
-  {
-    id: 'child',
-    name: 'Child',
-    price: 9.99,
-    description: 'Ages 3-12',
-  },
-  {
-    id: 'senior',
-    name: 'Senior',
-    price: 11.99,
-    description: 'Ages 65 and up',
-  },
-  {
-    id: 'student',
-    name: 'Student',
-    price: 12.99,
-    description: 'Valid student ID required',
-  },
-];
-
 export default function TicketSelectionScreen({ navigation, route }: TicketSelectionScreenProps) {
   const { showtimeId, selectedSeats } = route.params;
-  const { getShowtimeById, setTickets } = useMovieStore();
+  const { data: showtime, isLoading, error } = useShowtime(showtimeId);
   const [loading, setLoading] = useState(false);
-  const [quantities, setQuantities] = useState<Record<string, number>>(
-    Object.fromEntries(ticketTypes.map((type) => [type.id, 0]))
-  );
+  const [ticketTypes, setTicketTypes] = useState<{ [key: string]: number }>({
+    adult: 0,
+    child: 0,
+    senior: 0,
+  });
 
-  const showtime = getShowtimeById(showtimeId);
+  const prices = {
+    adult: showtime?.price || 0,
+    child: (showtime?.price || 0) * 0.7,
+    senior: (showtime?.price || 0) * 0.8,
+  };
 
-  useEffect(() => {
-    if (showtime) {
-      navigation.setOptions({
-        title: 'Select Tickets',
-      });
-    }
-  }, [showtime, navigation]);
-
-  const totalTickets = Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
-  const totalPrice = ticketTypes.reduce(
-    (sum, type) => sum + type.price * quantities[type.id],
-    0
-  );
-
-  const handleQuantityChange = (ticketId: string, change: number) => {
-    const newQuantity = Math.max(0, quantities[ticketId] + change);
-    const newTotalTickets = totalTickets + (newQuantity - quantities[ticketId]);
-
-    if (newTotalTickets > selectedSeats.length) return;
-
-    setQuantities((prev) => ({
+  const handleIncrement = (type: string) => {
+    setTicketTypes((prev) => ({
       ...prev,
-      [ticketId]: newQuantity,
+      [type]: prev[type] + 1,
     }));
   };
 
-  const handleContinue = async () => {
-    if (totalTickets !== selectedSeats.length) return;
+  const handleDecrement = (type: string) => {
+    setTicketTypes((prev) => ({
+      ...prev,
+      [type]: Math.max(0, prev[type] - 1),
+    }));
+  };
+
+  const calculateTotal = () => {
+    return Object.entries(ticketTypes).reduce(
+      (total, [type, count]) => total + count * prices[type as keyof typeof prices],
+      0
+    );
+  };
+
+  const handleConfirm = async () => {
+    const totalTickets = Object.values(ticketTypes).reduce((sum, count) => sum + count, 0);
+    if (totalTickets !== selectedSeats.length) {
+      alert('Please select the correct number of tickets for your seats');
+      return;
+    }
 
     setLoading(true);
     try {
-      // In a real app, this would validate ticket availability with the backend
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      setTickets(quantities);
-      navigation.navigate('Payment', {
+      // In a real app, this would create a booking with the backend
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      navigation.navigate('BookingConfirmation', {
         showtimeId,
         selectedSeats,
-        ticketQuantities: quantities,
+        ticketTypes,
       });
+    } catch (error) {
+      alert('Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  if (!showtime) {
+  if (isLoading) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>Showtime not found</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
 
+  if (error || !showtime) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Error loading showtime. Please try again later.</Text>
+      </View>
+    );
+  }
+
+  const totalPrice = calculateTotal();
+
   return (
     <View style={styles.container}>
-      <Text style={styles.seatsText}>
-        {selectedSeats.length} {selectedSeats.length === 1 ? 'seat' : 'seats'} selected
-      </Text>
+      <ScrollView style={styles.content}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Select Ticket Types</Text>
+          {Object.entries(ticketTypes).map(([type, count]) => (
+            <View key={type} style={styles.ticketRow}>
+              <View style={styles.ticketInfo}>
+                <Text style={styles.ticketType}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
+                <Text style={styles.ticketPrice}>${prices[type as keyof typeof prices].toFixed(2)}</Text>
+              </View>
+              <View style={styles.quantityControls}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => handleDecrement(type)}
+                >
+                  <Text style={styles.quantityButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.quantity}>{count}</Text>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => handleIncrement(type)}
+                >
+                  <Text style={styles.quantityButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </View>
 
-      <FlatList
-        data={ticketTypes}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <View style={styles.ticketItem}>
-            <View style={styles.ticketInfo}>
-              <Text style={styles.ticketName}>{item.name}</Text>
-              <Text style={styles.ticketDescription}>{item.description}</Text>
-              <Text style={styles.ticketPrice}>${item.price.toFixed(2)}</Text>
-            </View>
-            <View style={styles.quantityControls}>
-              <TouchableOpacity
-                style={[styles.quantityButton, quantities[item.id] === 0 && styles.disabledButton]}
-                onPress={() => handleQuantityChange(item.id, -1)}
-                disabled={quantities[item.id] === 0}
-              >
-                <Text style={styles.quantityButtonText}>-</Text>
-              </TouchableOpacity>
-              <Text style={styles.quantity}>{quantities[item.id]}</Text>
-              <TouchableOpacity
-                style={[
-                  styles.quantityButton,
-                  totalTickets === selectedSeats.length && styles.disabledButton,
-                ]}
-                onPress={() => handleQuantityChange(item.id, 1)}
-                disabled={totalTickets === selectedSeats.length}
-              >
-                <Text style={styles.quantityButtonText}>+</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-        style={styles.ticketList}
-      />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Selected Seats</Text>
+          <Text style={styles.seatsText}>{selectedSeats.join(', ')}</Text>
+        </View>
+      </ScrollView>
 
       <View style={styles.footer}>
         <View style={styles.priceContainer}>
@@ -161,23 +140,23 @@ export default function TicketSelectionScreen({ navigation, route }: TicketSelec
         </View>
         <TouchableOpacity
           style={[
-            styles.continueButton,
-            (totalTickets !== selectedSeats.length || loading) && styles.disabledButton,
+            styles.confirmButton,
+            (loading || totalPrice === 0) && styles.disabledButton,
           ]}
-          onPress={handleContinue}
-          disabled={totalTickets !== selectedSeats.length || loading}
+          onPress={handleConfirm}
+          disabled={loading || totalPrice === 0}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.continueButtonText}>Continue</Text>
+            <Text style={styles.confirmButtonText}>Confirm Booking</Text>
           )}
         </TouchableOpacity>
       </View>
 
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       )}
     </View>
@@ -187,44 +166,44 @@ export default function TicketSelectionScreen({ navigation, route }: TicketSelec
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background,
   },
-  seatsText: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  ticketList: {
+  loadingContainer: {
     flex: 1,
-    padding: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
   },
-  ticketItem: {
+  content: {
+    flex: 1,
+  },
+  section: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: colors.text,
+  },
+  ticketRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    marginBottom: 16,
   },
   ticketInfo: {
     flex: 1,
   },
-  ticketName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  ticketDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+  ticketType: {
+    fontSize: 16,
+    color: colors.text,
   },
   ticketPrice: {
-    fontSize: 16,
-    color: '#007AFF',
+    fontSize: 14,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   quantityControls: {
@@ -235,62 +214,63 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#007AFF',
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
   quantityButtonText: {
-    fontSize: 20,
-    color: '#fff',
-    fontWeight: 'bold',
+    fontSize: 18,
+    color: colors.text,
   },
   quantity: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
     marginHorizontal: 16,
-    minWidth: 24,
-    textAlign: 'center',
+    color: colors.text,
+  },
+  seatsText: {
+    fontSize: 16,
+    color: colors.textSecondary,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     padding: 16,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: colors.border,
   },
   priceContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
   priceLabel: {
-    fontSize: 16,
-    color: '#666',
-    marginRight: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.text,
   },
   priceValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#007AFF',
+    color: colors.primary,
   },
-  continueButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  confirmButton: {
+    backgroundColor: colors.primary,
     borderRadius: 8,
+    padding: 16,
+    alignItems: 'center',
   },
-  continueButtonText: {
+  disabledButton: {
+    backgroundColor: colors.disabled,
+  },
+  confirmButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
   },
   errorText: {
     textAlign: 'center',
     fontSize: 16,
-    color: '#ff3b30',
+    color: colors.error,
     marginTop: 32,
   },
   loadingOverlay: {

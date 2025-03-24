@@ -22,7 +22,7 @@ export default function MovieCard({ movie, onPress }: MovieCardProps) {
   return (
     <TouchableOpacity onPress={onPress} style={styles.container}>
       <Image
-        source={{ uri: movie.posterUrl }}
+        source={{ uri: movie.imageUrl }}
         style={styles.poster}
         resizeMode="cover"
       />

@@ -1,47 +1,99 @@
 import React from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import { useMovieStore } from '../store/movieStore';
-import { useNavigation } from '@react-navigation/native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  ActivityIndicator,
+} from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
+import { useMovies, useShowtimes } from '../services/api/useApi';
 import { colors } from '../theme';
-import { Movie } from '../types/data';
 
-type RootStackParamList = {
-  MovieDetails: { movieId: string };
+type HomeScreenProps = {
+  navigation: NativeStackNavigationProp<RootStackParamList, 'MovieDetails'>;
 };
 
-export default function HomeScreen() {
-  const { movies } = useMovieStore();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+export default function HomeScreen({ navigation }: HomeScreenProps) {
+  const { data: movies, isLoading: isLoadingMovies } = useMovies();
+  const { data: showtimes, isLoading: isLoadingShowtimes } = useShowtimes();
 
-  const renderMovieItem = ({ item }: { item: Movie }) => (
-    <TouchableOpacity
-      style={styles.movieCard}
-      onPress={() => navigation.navigate('MovieDetails', { movieId: item.id })}
-    >
-      <Image
-        source={{ uri: item.posterUrl || 'https://via.placeholder.com/150x225' }}
-        style={styles.poster}
-      />
-      <View style={styles.movieInfo}>
-        <Text style={styles.title}>{item.title}</Text>
-        <Text style={styles.rating}>{item.rating}</Text>
-        <Text style={styles.genre}>{item.genre.join(', ')}</Text>
+  const formatPrice = (price: string | number) => {
+    const numericPrice = typeof price === 'string' ? parseFloat(price) : price;
+    return `$${numericPrice.toFixed(2)}`;
+  };
+
+  if (isLoadingMovies || isLoadingShowtimes) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
-    </TouchableOpacity>
-  );
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Now Playing</Text>
-      <FlatList
-        data={movies}
-        renderItem={renderMovieItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-      />
-    </View>
+    <ScrollView style={styles.container}>
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Now Showing</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {movies?.map((movie) => (
+            <TouchableOpacity
+              key={movie.id}
+              style={styles.movieCard}
+              onPress={() => navigation.navigate('MovieDetails', { movieId: movie.id })}
+            >
+              <Image source={{ uri: movie.imageUrl }} style={styles.poster} />
+              <Text style={styles.movieTitle}>{movie.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Coming Soon</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {movies?.slice(0, 5).map((movie) => (
+            <TouchableOpacity
+              key={movie.id}
+              style={styles.movieCard}
+              onPress={() => navigation.navigate('MovieDetails', { movieId: movie.id })}
+            >
+              <Image source={{ uri: movie.imageUrl }} style={styles.poster} />
+              <Text style={styles.movieTitle}>{movie.title}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Today's Showtimes</Text>
+        {showtimes?.slice(0, 5).map((showtime) => (
+          <TouchableOpacity
+            key={showtime.id}
+            style={styles.showtimeCard}
+            onPress={() => {
+              if (showtime.movie?.id) {
+                navigation.navigate('MovieDetails', { movieId: showtime.movie.id });
+              }
+            }}
+          >
+            <View style={styles.showtimeInfo}>
+              <Text style={styles.showtimeTitle}>{showtime.movie?.title}</Text>
+              <Text style={styles.showtimeTime}>
+                {new Date(showtime.startTime).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </Text>
+            </View>
+            <Text style={styles.showtimePrice}>{formatPrice(showtime.price)}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -49,49 +101,62 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+  },
+  section: {
     padding: 16,
   },
-  header: {
-    fontSize: 24,
+  sectionTitle: {
+    fontSize: 20,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 16,
-  },
-  list: {
-    paddingBottom: 16,
   },
   movieCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    width: 120,
+    marginRight: 16,
   },
   poster: {
-    width: '100%',
-    height: 225,
-    resizeMode: 'cover',
+    width: 120,
+    height: 180,
+    borderRadius: 8,
+    marginBottom: 8,
   },
-  movieInfo: {
-    padding: 12,
+  movieTitle: {
+    fontSize: 14,
+    color: colors.text,
+    textAlign: 'center',
   },
-  title: {
-    fontSize: 18,
+  showtimeCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  showtimeInfo: {
+    flex: 1,
+  },
+  showtimeTitle: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: colors.text,
     marginBottom: 4,
   },
-  rating: {
+  showtimeTime: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginBottom: 4,
   },
-  genre: {
-    fontSize: 14,
-    color: colors.textSecondary,
+  showtimePrice: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.primary,
   },
 }); 

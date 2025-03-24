@@ -1,15 +1,16 @@
 export const colors = {
   primary: '#007AFF',
   secondary: '#5856D6',
-  background: '#F2F2F7',
-  surface: '#E5E5EA',
-  card: '#FFFFFF',
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  border: '#C6C6C8',
+  background: '#fff',
+  surface: '#e0e0e0',
+  card: '#fff',
+  text: '#000',
+  textSecondary: '#666',
+  border: '#e0e0e0',
   success: '#34C759',
-  error: '#FF3B30',
+  error: '#ff3b30',
   warning: '#FF9500',
+  disabled: '#ccc',
 };
 
 export const typography = {

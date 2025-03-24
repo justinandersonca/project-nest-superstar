@@ -15,11 +15,8 @@ export type RootStackParamList = {
   Showtimes: { movieId: string; theaterId: string };
   SeatSelection: { showtimeId: string };
   TicketSelection: { showtimeId: string; selectedSeats: string[] };
-  Payment: {
-    showtimeId: string;
-    selectedSeats: string[];
-    ticketQuantities: Record<string, number>;
-  };
+  BookingConfirmation: { showtimeId: string; selectedSeats: string[]; ticketTypes: { [key: string]: number } };
+  Payment: undefined;
   OrderConfirmation: { orderId: string };
   TheaterDetails: { theater: Theater };
   FoodAndDrinks: undefined;

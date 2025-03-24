@@ -1,12 +1,12 @@
 export interface Movie {
   id: string;
   title: string;
-  posterUrl: string;
-  duration: string;
-  rating: string;
-  genre: string;
-  releaseDate: string;
+  imageUrl: string;
+  duration: number;
   description: string;
+  rating?: string;
+  genre?: string;
+  releaseDate?: string;
 }
 
 export interface ShowTime {
