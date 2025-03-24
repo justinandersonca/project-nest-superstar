@@ -42,13 +42,25 @@ yarn-error.log*
 ehthumbs.db
 Thumbs.db
 
+# Git
+.git/
+.gitignore
+
 # Docker
-docker-compose.override.yml
+Dockerfile*
+docker-compose*
+.dockerignore
 
 # TypeORM
 *.sql
 *.sqlite
 *.sqlite3
 
-# TypeScript
-*.tsbuildinfo 
+# Documentation
+docs/
+*.md
+!README.md
+
+# Exclude .env files
+.env.*
+packages/api/.env.* 
